@@ -1,0 +1,7 @@
+{
+  "host": "localhost",
+  "user": "root",
+  "password": "ehsehs12",
+  "port": "3306",
+  "database": "reservation"
+}
