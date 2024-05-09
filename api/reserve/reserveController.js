@@ -13,7 +13,9 @@ router.get("/date/:id", async (req, res) => {
           Theaters.name AS theater_name,
           Theaters.location AS theater_location,
           ScreeningSchedules.screening_date,
-          ScreeningSchedules.start_time
+          ScreeningSchedules.start_time,
+          ScreeningSchedules.theater_id,
+          screeningschedules.id AS schedule_id
         FROM
           ScreeningSchedules
         JOIN Movies ON ScreeningSchedules.movie_id = Movies.id
@@ -42,8 +44,19 @@ router.get("/date/:id", async (req, res) => {
 router.get('/seat', async (req, res) => {
     let conn;
     try {
+        const { schedule_id, theater_id } = req.query;
         conn = await pool.getConnection();
-        const rows = await conn.query('SELECT * FROM seat ORDER BY LENGTH(seat_number), seat_number');
+        const rows = await conn.query(`
+        SELECT s.id AS seat_id, s.seat_number,
+            CASE 
+            WHEN r.id IS NULL THEN 'A'
+            ELSE 'R'
+            END AS reservation_status
+        FROM
+        Seats s LEFT JOIN Reservations r ON s.seat_number = r.seat_number AND r.schedule_id = ?
+            WHERE s.theater_id = ?
+        ORDER BY LENGTH(s.seat_number), seat_number;
+      `, [schedule_id, theater_id]);
         res.json(rows);
     } catch (err) {
         console.error(err);
