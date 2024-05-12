@@ -50,6 +50,7 @@ router.get('/seat', async (req, res) => {
         SELECT s.id AS seat_id, s.seat_number,
             CASE 
             WHEN r.id IS NULL THEN 'A'
+            WHEN r.reservation_status = "P" THEN 'P'
             ELSE 'R'
             END AS reservation_status
         FROM
@@ -82,7 +83,7 @@ router.post('/reserve', async (req, res) => {
         } else {
             // 해당 좌석에 대한 데이터가 없으면 새로운 행을 삽입합니다.
             await conn.query("INSERT INTO reservations (schedule_id, seat_number, reservation_status, user_id) VALUES (?, ?, 'P', ?)", [scheduleId, seatNumber, userId]);
-            return res.json({ message: '5분안에 결제하셔야 예약이 진행됩니다.' });
+            return res.json({ message: '최종 예약을 누르면 예약 확정 됩니다.' });
         }
 
         // 좌석 상태를 'processing'으로 업데이트하고, 예약을 진행 중인 사용자의 ID를 저장합니다.
