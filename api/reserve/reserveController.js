@@ -1,5 +1,6 @@
 import { pool } from "../../config/db.js";
 import { Router } from 'express';
+import schedule from "node-schedule";
 const router = Router();
 
 router.get("/date/:id", async (req, res) => {
@@ -82,14 +83,28 @@ router.post('/reserve', async (req, res) => {
             }
         } else {
             // 해당 좌석에 대한 데이터가 없으면 새로운 행을 삽입합니다.
-            await conn.query("INSERT INTO reservations (schedule_id, seat_number, reservation_status, user_id) VALUES (?, ?, 'P', ?)", [scheduleId, seatNumber, userId]);
-            return res.json({ message: '최종 예약을 누르면 예약 확정 됩니다.' });
+            const result = await conn.query("INSERT INTO reservations (schedule_id, seat_number, reservation_status, user_id) VALUES (?, ?, 'P', ?)", [scheduleId, seatNumber, userId]);
+            const reservationId = result.insertId;
+            console.log(reservationId);
+            schedule.scheduleJob(Date.now() + 1 * 60000, async () => {
+                const reservation = await conn.query("SELECT reservation_status from reservations WHERE id = ?", [reservationId]);
+                console.log(reservation);
+                if (reservation.length > 0 && reservation[0].reservation_status === 'P') {
+                    await conn.query(
+                        `DELETE FROM reservations WHERE id = ?`,
+                        [reservationId]
+                    );
+                    console.log(`Reservation ID ${reservationId} is now expired.`);
+                }
+            })
+            return res.json({ message: '5분안에 최종 예약을 누르면 예약이 완료됩니다.' });
+
         }
 
         // 좌석 상태를 'processing'으로 업데이트하고, 예약을 진행 중인 사용자의 ID를 저장합니다.
-        await conn.query("UPDATE reservations SET reservation_status='P', user_id=? WHERE schedule_id=? AND seat_number=?", [userId, scheduleId, seatNumber]);
+        // await conn.query("UPDATE reservations SET reservation_status='P', user_id=? WHERE schedule_id=? AND seat_number=?", [userId, scheduleId, seatNumber]);
 
-        res.json({ message: 'Reservation process started. Please complete within 5 minutes.' });
+        // res.json({ message: 'Reservation process started. Please complete within 5 minutes.' });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Server error' });
