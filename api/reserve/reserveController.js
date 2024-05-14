@@ -76,7 +76,6 @@ router.post('/reserve', async (req, res) => {
 
         // 좌석이 이미 예약 진행 중인지 확인하고, 해당 사용자가 이미 예약을 진행 중인지 확인합니다.
         let seatStatus = await conn.query("SELECT user_id, reservation_status FROM reservations WHERE schedule_id=? AND seat_number=?", [scheduleId, seatNumber]);
-        console.log(seatStatus);
         if (seatStatus.length > 0) {
             if (seatStatus[0].reservation_status === 'P' && seatStatus[0].user_id !== userId) {
                 return res.status(400).json({ message: '이미 예약중인 좌석입니다.' });
@@ -85,16 +84,13 @@ router.post('/reserve', async (req, res) => {
             // 해당 좌석에 대한 데이터가 없으면 새로운 행을 삽입합니다.
             const result = await conn.query("INSERT INTO reservations (schedule_id, seat_number, reservation_status, user_id) VALUES (?, ?, 'P', ?)", [scheduleId, seatNumber, userId]);
             const reservationId = result.insertId;
-            console.log(reservationId);
-            schedule.scheduleJob(Date.now() + 1 * 60000, async () => {
+            schedule.scheduleJob(Date.now() + 5 * 60000, async () => {
                 const reservation = await conn.query("SELECT reservation_status from reservations WHERE id = ?", [reservationId]);
-                console.log(reservation);
                 if (reservation.length > 0 && reservation[0].reservation_status === 'P') {
                     await conn.query(
                         `DELETE FROM reservations WHERE id = ?`,
                         [reservationId]
                     );
-                    console.log(`Reservation ID ${reservationId} is now expired.`);
                 }
             })
             return res.json({ message: '5분안에 최종 예약을 누르면 예약이 완료됩니다.' });
@@ -116,20 +112,20 @@ router.post('/reserve', async (req, res) => {
 router.post('/completeReservation', async (req, res) => {
     let conn;
     try {
-        const { userId, scheduleId, seatNumber } = req.body;
+        const { userId, id } = req.body;
         conn = await pool.getConnection();
 
         // 예약 진행 중 상태 확인
-        const seatStatus = await conn.query("SELECT reservation_status, user_id FROM reservations WHERE schedule_id=? AND seat_number=?", [scheduleId, seatNumber]);
+        const seatStatus = await conn.query("SELECT reservation_status, user_id FROM reservations WHERE id = ?", [id]);
 
         if (!seatStatus[0] || seatStatus[0].reservation_status !== 'P' || seatStatus[0].user_id !== userId) {
-            return res.status(400).json({ message: 'This seat is not under reservation process by this user.' });
+            return res.status(400).json({ message: '이 좌석은 이 사용자가 예약 중인 좌석이 아닙니다.' });
         }
 
         // 예약 완료 처리
-        await conn.query("UPDATE reservations SET reservation_status='R', user_id=? WHERE schedule_id=? AND seat_number=?", [userId, scheduleId, seatNumber]);
+        await conn.query("UPDATE reservations SET reservation_status='R' WHERE id = ?", [id]);
 
-        res.json({ message: 'Reservation completed successfully.' });
+        res.json({ message: '예약이 성공적으로 완료되었습니다.' });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Server error' });
